@@ -1,12 +1,25 @@
-const WebTorrent = require('webtorrent')
-const term = require( 'terminal-kit' ).terminal;
+import WebTorrent from 'webtorrent'
+import { Terminal, terminal as term } from 'terminal-kit';
 const path = require('path')
 const fs = require('fs')
+
+declare module "webtorrent" {
+  interface Torrent {
+    on(event: 'metadata', callback: (metadata: any) => void): this;
+  }
+  interface TorrentFile {
+    readonly size: number;
+  }
+}
+
 class TorrentDownloader {
+  client: WebTorrent.Instance;
+  start: {};
+  progressBar: { [url: string]: Terminal.ProgressBarController };
   constructor() {
     this.client = new WebTorrent()
     this.start = {}
-    this.progressbar = {}
+    this.progressBar = {}
   }
   add(url, folder, cb) {
     return new Promise((resolve, reject) => {
@@ -15,7 +28,7 @@ class TorrentDownloader {
         fs.mkdirSync(folder, { recursive: true })
       }
       this.client.add(url, { path: folder }, (torrent) => {
-        this.progressbar[url] = term.progressBar({
+        this.progressBar[url] = term.progressBar({
           width: 120,
           title: torrent.name,
           eta: true,
@@ -30,14 +43,14 @@ class TorrentDownloader {
           if (cb) {
             cb({ progress: torrent.progress, speed: torrent.downloadSpeed, downloaded: torrent.downloaded })
           }
-          this.progressbar[url].update(torrent.progress)
+          this.progressBar[url].update(torrent.progress)
         })
         torrent.on('done', () => {
           console.log('torrent download finished')
           const end = Date.now()
           const elapsed = end - this.start[torrent.name]
           console.log({ start: this.start[torrent.name], end: end, elapsed })
-          this.progressbar[url].update(1)
+          this.progressBar[url].update(1)
           term("\n")
           resolve(torrent)
           for (const file of torrent.files) {
@@ -49,4 +62,5 @@ class TorrentDownloader {
     })
   }
 }
-module.exports = TorrentDownloader
+
+export default TorrentDownloader

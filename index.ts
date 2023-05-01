@@ -1,5 +1,7 @@
+import TorrentDownloader from "./torrent";
+
 const os = require('os');
-const pty = require('node-pty');
+import pty = require('node-pty');
 //const pty = require('@cdktf/node-pty-prebuilt-multiarch');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
@@ -10,16 +12,16 @@ const tar = require('tar');
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { io } = require("socket.io-client");
-const term = require( 'terminal-kit' ).terminal;
+import { Terminal, terminal as term } from 'terminal-kit';
+import { Callback, QueryRequest } from "./types";
 const Downloader = require("nodejs-file-downloader");
 const semver = require('semver');
 //const _7z = require('7zip-min');
-const axios = require('axios')
+import axios, { AxiosHeaders, RawAxiosRequestHeaders } from 'axios'
 const platform = os.platform()
 const shell = platform === 'win32' ? 'powershell.exe' : 'bash';
 const L = require("./llama")
 const A = require("./alpaca")
-const TorrentDownloader = require("./torrent")
 const exists = s => new Promise(r=>fs.access(s, fs.constants.F_OK, e => r(!e)))
 const escapeNewLine = (platform, arg) => platform === 'win32' ? arg.replaceAll(/\n/g, "\\n").replaceAll(/\r/g, "\\r") : arg
 const escapeDoubleQuotes = (platform, arg) => platform === 'win32' ? arg.replaceAll(/"/g, '`"') : arg.replaceAll(/"/g, '\\"')
@@ -42,8 +44,20 @@ const winEscape = (str) => {
   .replaceAll(/\\/g, "")
 }
 
+type Config = { name: string; cols: number; rows: number; cwd?: string };
+
 class Dalai {
-  constructor(home) {
+  home: string;
+  torrent: TorrentDownloader;
+  config: Config;
+  cores: { llama: any; alpaca: any; };
+  ptyProcess?: pty.IPty;
+  progressBar?: Terminal.ProgressBarController;
+  sessionBuffer?: string;
+  bufferStarted?: boolean;
+  queue?: string[];
+  queueActive?: boolean;
+  constructor(home?: string) {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //
     // 1. manually set llama.cpp home
@@ -102,8 +116,8 @@ class Dalai {
     }
     return encodedStr;
   }
-  down(url, dest, headers) {
-    return new Promise((resolve, reject) => {
+  down(url: string, dest: string, headers: RawAxiosRequestHeaders) {
+    return new Promise<void>((resolve, reject) => {
       const task = path.basename(dest)
       this.startProgress(task)
       axios({
@@ -113,7 +127,7 @@ class Dalai {
         maxContentLength: Infinity,
         headers,
         onDownloadProgress: progressEvent => {
-          const progress = (progressEvent.loaded / progressEvent.total) * 100;
+          const progress = progressEvent.total ? (progressEvent.loaded / progressEvent.total) * 100 : 0;
           this.progress(task, progress)
         }
 
@@ -121,7 +135,7 @@ class Dalai {
         const writer = fs.createWriteStream(dest);
         response.data.pipe(writer);
         writer.on('finish', () => {
-          this.progressBar.update(1);
+          this.progressBar?.update(1);
           term("\n")
           resolve()
         });
@@ -150,7 +164,7 @@ class Dalai {
     } catch (error) {
       console.log(error);
     }
-    this.progressBar.update(1);
+    this.progressBar?.update(1);
     console.log("extracting python")
     await tar.x({
       file: path.resolve(this.home, filename),
@@ -188,7 +202,7 @@ class Dalai {
 //    console.log("cleaning up temp files")
 //    await fs.promises.rm(path.resolve(this.home, "x86_64-12.2.0-release-win32-seh-msvcrt-rt_v10-rev2.7z"))
 //  }
-  async query(req, cb) {
+  async query(req: QueryRequest, cb: Callback) {
     
     console.log(`> query:`, req)
     if (req.method === "installed") {
@@ -221,7 +235,7 @@ class Dalai {
 
     console.log( { Core, Model } )
 
-    let o = {
+    let o: Partial<QueryRequest> = {
       seed: req.seed || -1,
       threads: req.threads || 8,
       n_predict: req.n_predict || 128,
@@ -242,7 +256,7 @@ class Dalai {
     if (req.repeat_penalty) o.repeat_penalty = req.repeat_penalty
     if (typeof req.interactive !== "undefined") o.interactive = req.interactive
 
-    let chunks = []
+    let chunks: string[] = []
     for(let key in o) {
       chunks.push(`--${key} ${escapeDoubleQuotes(platform, o[key].toString())}`)
     }
@@ -257,24 +271,24 @@ class Dalai {
     if (req.full) {
       await this.exec(`${main_bin_path} ${chunks.join(" ")}`, this.cores[Core].home, cb)
     } else {
-      const startpattern = /.*sampling parameters:.*/g
-      const endpattern = /.*mem per token.*/g
+      const startPattern = /.*sampling parameters:.*/g
+      const endPattern = /.*mem per token.*/g
       let started = req.debug
       let ended = false
       let writeEnd = !req.skip_end
-      await this.exec(`${main_bin_path} ${chunks.join(" ")}`, this.cores[Core].home, (proc, msg) => {
-        if (endpattern.test(msg)) ended = true
+      await this.exec(`${main_bin_path} ${chunks.join(" ")}`, this.cores[Core].home, (proc, msg = '') => {
+        if (endPattern.test(msg)) ended = true
         if (started && !ended) {
           this.buffer(req, msg, cb)
         } else if (ended && writeEnd) {
           cb('\n\n<end>')
           writeEnd = false
         }
-        if (startpattern.test(msg)) started = true
+        if (startPattern.test(msg)) started = true
       })
     }
   }
-  buffer(req, msg, cb) {
+  buffer(req: QueryRequest, msg: string, cb: (str: string) => void) {
     if (!this.queue) this.queue = []
     if (platform === "win32") {
       for(let i=0;i<msg.length; i++) {
@@ -353,7 +367,7 @@ class Dalai {
   }
   async installed() {
     // get cores
-    const modelNames = []
+    const modelNames: string[] = []
     for(let core of ["alpaca", "llama"]) {
       const modelsPath = path.resolve(this.home, core, "models")
       console.log("modelsPath", modelsPath)
@@ -552,8 +566,8 @@ class Dalai {
       throw e
     });
   }
-  exec(cmd, cwd, cb) {
-    return new Promise((resolve, reject) => {
+  exec(cmd: string, cwd?: string, cb?: Callback) {
+    return new Promise<boolean>((resolve, reject) => {
       try {
         const config = Object.assign({}, this.config)
         if (cwd) {
@@ -586,13 +600,13 @@ class Dalai {
         this.ptyProcess.write("exit\r")
       } catch (e) {
         console.log("caught error", e)
-        this.ptyProcess.kill()
+        this.ptyProcess?.kill()
         // ptyProcess.write("exit\r")
       }
     })
   }
   progress(task, percent) {
-    this.progressBar.update(percent/100);
+    this.progressBar?.update(percent/100);
     //if (percent >= 100) {
     //  setTimeout(() => {
     //    term("\n")
@@ -608,4 +622,5 @@ class Dalai {
     });
   }
 }
-module.exports = Dalai
+
+export default Dalai

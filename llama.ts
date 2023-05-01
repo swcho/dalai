@@ -1,3 +1,5 @@
+import { Root } from "./types";
+
 const path = require('path');
 const term = require( 'terminal-kit' ).terminal;
 const git = require('isomorphic-git');
@@ -7,7 +9,10 @@ const os = require('os');
 const fs = require("fs");
 const platform = os.platform()
 class LLaMA {
-  constructor(root) {
+  root: Root;
+  home: string;
+  url: string;
+  constructor(root: Root) {
     this.root = root
     this.home = path.resolve(this.root.home, "llama")
     this.url = "https://github.com/candywrap/llama.cpp.git"
@@ -22,24 +27,28 @@ class LLaMA {
       await this.root.exec("mkdir build", this.home)      
       await this.root.exec(`Remove-Item -path ${path.resolve(this.home, "build", "CMakeCache.txt")}`, this.home)
       let PS_COUNTER = 0
-      await this.root.exec(`${cmake_path} ..`, path.resolve(this.home, "build"), (proc, data) => {
+      await this.root.exec(`${cmake_path} ..`, path.resolve(this.home, "build"), (proc, data = '') => {
         console.log("# data", data);
         if (/^PS .*/.test(data)) {
           PS_COUNTER++;
           if (PS_COUNTER >= 2) {
             console.log("KILL")
-            proc.kill()
+            if (proc && typeof proc !== 'string') {
+              proc.kill()
+            }
           }
         }
       })
       PS_COUNTER = 0;
-      await this.root.exec(`${cmake_path} --build . --config Release`, path.resolve(this.home, "build"), (proc, data) => {
+      await this.root.exec(`${cmake_path} --build . --config Release`, path.resolve(this.home, "build"), (proc, data = '') => {
         console.log("# data", data);
         if (/^PS .*/.test(data)) {
           PS_COUNTER++;
           if (PS_COUNTER >= 2) {
             console.log("KILL2")
-            proc.kill()
+            if (proc && typeof proc !== 'string') {
+              proc.kill()
+            }
           }
         }
       })
@@ -165,4 +174,4 @@ npx dalai install 7B 13B
 
   }
 }
-module.exports = LLaMA
+export default LLaMA

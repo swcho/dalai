@@ -1,4 +1,5 @@
-const Dalai = require("./index")
+import Dalai from "./index"
+
 new Dalai().setup().then(() => {
   console.log("executed setup")
   process.exit(0)
