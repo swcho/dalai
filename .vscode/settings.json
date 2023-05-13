@@ -1,0 +1,24 @@
+{
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  // "typescript.tsdk": "node_modules/typescript/lib",
+  "eslint.options": {
+    // "resolvePluginsRelativeTo": "./packages/config",
+    // "overrideConfigFile": "packages/config/.eslintrc.js"
+  },
+  // // "eslint.workingDirectories": [
+  // //   ".",
+  // // ],
+  // // "eslint.workingDirectories": [
+  // //   "./pacakges/app",
+  // //   "./pacakges/controls",
+  // //   "./pacakges/components",
+  // //   "./pacakges/config",
+  // // ],
+  // "githubPullRequests.ignoredPullRequestBranches": [
+  //   "develop"
+  // ],
+  // "prettier.enable": false,
+  // "prettier.configPath": "packages/config/.prettierrc.js",
+}

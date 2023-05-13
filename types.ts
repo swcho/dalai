@@ -1,16 +1,21 @@
 import type { RawAxiosRequestHeaders } from 'axios';
+
 import type pty = require('node-pty');
 
-export type Callback = (ptyProcess?: pty.IPty | string, data?: string) => void
+export type Callback = (ptyProcess?: pty.IPty | string, data?: string) => void;
 
 export interface Root {
-	home: string;
-  exec(cmd: string, cwd?: string, cb?: Callback): Promise<boolean>
-  down(url: string, dest: string, headers: RawAxiosRequestHeaders): Promise<void>
+  home: string;
+  exec(cmd: string, cwd?: string, cb?: Callback): Promise<boolean>;
+  down(
+    url: string,
+    dest: string,
+    headers?: RawAxiosRequestHeaders,
+  ): Promise<void>;
 }
 
 export type QueryRequest = {
-	method: 'installed'
+  method: 'installed';
   prompt: string;
   model: string;
   seed: number;
@@ -27,4 +32,4 @@ export type QueryRequest = {
   debug: boolean;
   skip_end: boolean;
   html: string;
-}
+};

@@ -1,9 +1,12 @@
-import Dalai from "./index"
+import { Dalai } from './DalaiRoot';
 
-new Dalai().setup().then(() => {
-  console.log("executed setup")
-  process.exit(0)
-}).catch((e) => {
-  console.log("Error", e)
-  process.exit(1)
-})
+new Dalai()
+  .setup()
+  .then(() => {
+    console.log('executed setup');
+    process.exit(0);
+  })
+  .catch((e) => {
+    console.log('Error', e);
+    process.exit(1);
+  });
